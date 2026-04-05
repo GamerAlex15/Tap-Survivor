@@ -1,0 +1,555 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Tap Survivor - PWA EDITION</title>
+    
+    <!-- PWA & iOS Meta Tags -->
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#000000">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="TapSurvivor">
+    
+    <style>
+        :root {
+            --primary-red: #ff3b30; /* iOS System Red */
+            --primary-blue: #007aff; /* iOS System Blue */
+            --gold: #ffcc00; /* iOS System Yellow */
+            --bg-dark: #000000;
+            --glass: rgba(255, 255, 255, 0.1);
+            --safe-top: env(safe-area-inset-top, 20px);
+            --safe-bottom: env(safe-area-inset-bottom, 20px);
+        }
+
+        body {
+            margin: 0;
+            overflow: hidden;
+            background: var(--bg-dark);
+            color: white;
+            font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Arial, sans-serif;
+            text-align: center;
+            user-select: none;
+            touch-action: none;
+        }
+
+        /* HAPTIC SHAKE */
+        .shake {
+            animation: shake 0.15s cubic-bezier(.36,.07,.19,.97) both;
+        }
+
+        @keyframes shake {
+            0% { transform: scale(1); }
+            50% { transform: scale(0.98) translate3d(-2px, 0, 0); }
+            100% { transform: scale(1); }
+        }
+
+        .screen {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            display: none;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+            background: #000;
+        }
+
+        h1 {
+            font-size: 3.5rem;
+            font-weight: 800;
+            letter-spacing: -2px;
+            background: linear-gradient(180deg, #fff 0%, #888 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 30px;
+        }
+
+        /* iOS STYLE BUTTONS */
+        .btn {
+            background: #fff;
+            color: #000;
+            border: none;
+            padding: 18px 60px;
+            font-size: 18px;
+            font-weight: 600;
+            margin: 10px;
+            border-radius: 16px;
+            cursor: pointer;
+            transition: transform 0.1s ease, opacity 0.2s;
+            width: 80%;
+            max-width: 300px;
+        }
+
+        .btn:active {
+            transform: scale(0.95);
+            opacity: 0.8;
+        }
+
+        .btn-secondary {
+            background: var(--glass);
+            color: #fff;
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+        }
+
+        #gameArea {
+            width: 100vw;
+            height: 100vh;
+            position: relative;
+            background: radial-gradient(circle at center, #111 0%, #000 100%);
+        }
+
+        /* DYNAMIC ENEMIES */
+        .enemy {
+            width: 70px;
+            height: 70px;
+            border-radius: 50%;
+            position: absolute;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 28px;
+            z-index: 5;
+            transition: transform 0.1s cubic-bezier(0, 0, 0.2, 1);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+        }
+
+        .enemy-lvl-1 { background: linear-gradient(135deg, #ff5e62, #ff9966); box-shadow: 0 0 20px rgba(255, 94, 98, 0.4); }
+        .enemy-lvl-2 { background: linear-gradient(135deg, #8e2de2, #4a00e0); box-shadow: 0 0 20px rgba(142, 45, 226, 0.4); }
+        .enemy-lvl-3 { background: linear-gradient(135deg, #00f2fe, #4facfe); box-shadow: 0 0 20px rgba(79, 172, 254, 0.4); }
+
+        /* UI ELEMENTS */
+        #ui {
+            position: absolute;
+            top: var(--safe-top);
+            left: 0;
+            width: 100%;
+            padding: 0 20px;
+            box-sizing: border-box;
+            display: flex;
+            justify-content: space-between;
+            pointer-events: none;
+            z-index: 100;
+        }
+
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(15px);
+            -webkit-backdrop-filter: blur(15px);
+            border-radius: 20px;
+            padding: 12px 20px;
+            border: 1px solid rgba(255,255,255,0.1);
+            pointer-events: auto;
+        }
+
+        .stats-group {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 4px;
+            font-variant-numeric: tabular-nums;
+        }
+
+        #abilities {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            padding-bottom: var(--safe-bottom);
+            position: absolute;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            pointer-events: auto;
+        }
+
+        .ability-btn {
+            width: 64px;
+            height: 64px;
+            border-radius: 20px;
+            background: var(--glass);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border: 1px solid rgba(255,255,255,0.2);
+            font-size: 28px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            transition: all 0.2s;
+            color: white;
+        }
+
+        .ability-btn:active { transform: scale(0.9); background: rgba(255,255,255,0.2); }
+
+        /* FLOATING TEXT */
+        .floatingText {
+            position: absolute;
+            color: #fff;
+            font-weight: 700;
+            font-size: 26px;
+            pointer-events: none;
+            z-index: 20;
+            animation: floatUp 0.6s forwards cubic-bezier(0.22, 1, 0.36, 1);
+        }
+
+        @keyframes floatUp {
+            0% { transform: translateY(0) scale(0.5); opacity: 0; }
+            20% { opacity: 1; transform: translateY(-10px) scale(1.1); }
+            100% { transform: translateY(-80px) scale(1); opacity: 0; }
+        }
+
+        #flash {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: white; opacity: 0; pointer-events: none; z-index: 200;
+        }
+
+        .lvl-banner {
+            position: absolute;
+            top: 50%; width: 100%;
+            font-size: 40px; font-weight: 900;
+            color: white; opacity: 0;
+            pointer-events: none;
+            z-index: 150;
+        }
+
+        .animate-banner {
+            animation: bannerIn 1.5s forwards;
+        }
+
+        @keyframes bannerIn {
+            0% { transform: scale(0.8); opacity: 0; filter: blur(10px); }
+            20% { transform: scale(1); opacity: 1; filter: blur(0px); }
+            80% { transform: scale(1.1); opacity: 1; filter: blur(0px); }
+            100% { transform: scale(1.2); opacity: 0; filter: blur(10px); }
+        }
+    </style>
+</head>
+<body>
+
+<div id="flash"></div>
+<div id="lvlBanner" class="lvl-banner">LEVEL UP!</div>
+
+<!-- MENU -->
+<div id="menu" class="screen" style="display:flex;">
+    <h1>TAP<br>SURVIVOR</h1>
+    <div class="glass-panel" style="margin-bottom: 40px; width: 200px;">
+        <div style="font-size: 14px; opacity: 0.6; text-transform: uppercase;">Best</div>
+        <div style="font-size: 24px; font-weight: 700;" id="highScore">0</div>
+        <div style="font-size: 14px; opacity: 0.6; text-transform: uppercase; margin-top: 10px;">Coins</div>
+        <div style="font-size: 24px; font-weight: 700; color: var(--gold);" id="coins">0</div>
+    </div>
+    <button class="btn" onclick="startGame()">Start Game</button>
+    <button class="btn btn-secondary" onclick="openShop()">The Armory</button>
+</div>
+
+<!-- SHOP -->
+<div id="shop" class="screen">
+    <h2 style="font-size: 32px; letter-spacing: -1px;">UPGRADES</h2>
+    <div class="glass-panel" style="width: 80%; max-width: 350px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center;">
+        <div style="text-align: left;">
+            <div style="font-weight: 700;">Vitality</div>
+            <div style="font-size: 12px; opacity: 0.6;">+1 Max Heart</div>
+        </div>
+        <button class="btn" style="width: 100px; padding: 10px; margin: 0; border-radius: 10px;" onclick="buyHealth()">10 🪙</button>
+    </div>
+    <div class="glass-panel" style="width: 80%; max-width: 350px; margin-bottom: 40px; display: flex; justify-content: space-between; align-items: center;">
+        <div style="text-align: left;">
+            <div style="font-weight: 700;">Chronos</div>
+            <div style="font-size: 12px; opacity: 0.6;">+5s Start Time</div>
+        </div>
+        <button class="btn" style="width: 100px; padding: 10px; margin: 0; border-radius: 10px;" onclick="buyTime()">15 🪙</button>
+    </div>
+    <button class="btn btn-secondary" onclick="backMenu()">Close</button>
+</div>
+
+<!-- GAME -->
+<div id="game" class="screen">
+    <div id="ui">
+        <div class="glass-panel stats-group">
+            <div style="font-size: 12px; opacity: 0.7; font-weight: 700;">SCORE</div>
+            <div style="font-size: 24px; font-weight: 800;" id="score">0</div>
+        </div>
+        <div class="glass-panel stats-group" style="align-items: flex-end;">
+            <div style="font-size: 12px; opacity: 0.7; font-weight: 700;">TIME</div>
+            <div style="font-size: 24px; font-weight: 800; color: var(--primary-blue);" id="time">30</div>
+        </div>
+    </div>
+
+    <div id="abilities">
+        <button class="ability-btn" id="btn-nuke" onclick="useNuke()">💥</button>
+        <button class="ability-btn" id="btn-slow" onclick="useSlow()">🐢</button>
+        <button class="ability-btn" id="btn-heal" onclick="useHeal()">❤️</button>
+    </div>
+
+    <div id="gameArea"></div>
+    
+    <div id="healthBar" style="position: absolute; top: calc(var(--safe-top) + 80px); left: 50%; transform: translateX(-50%); display: flex; gap: 5px;"></div>
+</div>
+
+<script>
+    let score = 0;
+    let health = 5;
+    let timeLeft = 30;
+    let level = 1;
+    let coins = parseInt(localStorage.getItem("ts_coins")) || 0;
+    let highScore = parseInt(localStorage.getItem("ts_highScore")) || 0;
+    let hpUpgrade = parseInt(localStorage.getItem("ts_hpUp")) || 0;
+    let timeUpgrade = parseInt(localStorage.getItem("ts_timeUp")) || 0;
+
+    let nukeCD = 0, slowCD = 0, healCD = 0;
+    const CD_MAX = { NUKE: 20, SLOW: 15, HEAL: 25 };
+
+    const menu = document.getElementById("menu");
+    const shop = document.getElementById("shop");
+    const game = document.getElementById("game");
+    const gameArea = document.getElementById("gameArea");
+    const flash = document.getElementById("flash");
+    const healthBar = document.getElementById("healthBar");
+    const lvlBanner = document.getElementById("lvlBanner");
+
+    const scoreText = document.getElementById("score");
+    const timeText = document.getElementById("time");
+    const coinsText = document.getElementById("coins");
+    const highScoreText = document.getElementById("highScore");
+
+    const btnNuke = document.getElementById("btn-nuke");
+    const btnSlow = document.getElementById("btn-slow");
+    const btnHeal = document.getElementById("btn-heal");
+
+    let spawnLoop, timerLoop;
+    let isSlowed = false;
+
+    updateMenu();
+
+    function show(screen) {
+        [menu, shop, game].forEach(s => s.style.display = "none");
+        screen.style.display = "flex";
+    }
+
+    function updateMenu() {
+        coinsText.textContent = coins;
+        highScoreText.textContent = highScore;
+    }
+
+    function startGame() {
+        score = 0;
+        level = 1;
+        health = 5 + hpUpgrade;
+        timeLeft = 30 + timeUpgrade;
+        nukeCD = 0; slowCD = 0; healCD = 0;
+        isSlowed = false;
+        gameArea.innerHTML = "";
+        show(game);
+        updateUI();
+        updateHealthBar();
+        startLoops();
+    }
+
+    function startLoops() {
+        // Dynamic difficulty
+        const getSpawnRate = () => Math.max(300, 900 - (level * 100));
+        
+        const runSpawn = () => {
+            if (game.style.display !== "flex") return;
+            spawnEnemy();
+            spawnLoop = setTimeout(runSpawn, isSlowed ? getSpawnRate() * 2 : getSpawnRate());
+        };
+        runSpawn();
+
+        timerLoop = setInterval(() => {
+            timeLeft--;
+            if(nukeCD > 0) nukeCD--;
+            if(slowCD > 0) slowCD--;
+            if(healCD > 0) healCD--;
+            
+            // Leveling logic
+            if (score > level * 20) {
+                level++;
+                showLevelUp();
+            }
+
+            updateAbilityUI();
+            updateUI();
+
+            if (timeLeft <= 0 || health <= 0) endGame();
+        }, 1000);
+    }
+
+    function spawnEnemy() {
+        const enemy = document.createElement("div");
+        const type = Math.min(3, level);
+        enemy.className = `enemy enemy-lvl-${type}`;
+        
+        const size = 70;
+        const x = Math.random() * (window.innerWidth - size);
+        const y = Math.random() * (window.innerHeight - (size + 200)) + 120;
+        
+        enemy.style.left = x + "px";
+        enemy.style.top = y + "px";
+        enemy.innerHTML = type === 1 ? "👾" : type === 2 ? "💀" : "🔥";
+
+        enemy.onpointerdown = (e) => {
+            e.stopPropagation();
+            hitEnemy(enemy, e.clientX, e.clientY);
+        };
+
+        gameArea.appendChild(enemy);
+
+        const despawnTime = (isSlowed ? 3000 : 1500) - (level * 50);
+        setTimeout(() => {
+            if (enemy.parentNode) {
+                enemy.remove();
+                takeDamage();
+            }
+        }, Math.max(800, despawnTime));
+    }
+
+    function hitEnemy(el, x, y) {
+        el.style.transform = "scale(0) rotate(90deg)";
+        el.style.opacity = "0";
+        createFloatingText("+1", x, y);
+        setTimeout(() => el.remove(), 100);
+        score++;
+        coins++;
+        updateUI();
+    }
+
+    function takeDamage() {
+        health--;
+        screenShake();
+        updateHealthBar();
+        if (health <= 0) endGame();
+    }
+
+    function updateHealthBar() {
+        healthBar.innerHTML = "";
+        for(let i=0; i < (5 + hpUpgrade); i++) {
+            const heart = document.createElement("div");
+            heart.style.fontSize = "20px";
+            heart.innerHTML = i < health ? "❤️" : "🖤";
+            healthBar.appendChild(heart);
+        }
+    }
+
+    function showLevelUp() {
+        lvlBanner.textContent = `LEVEL ${level}`;
+        lvlBanner.classList.remove("animate-banner");
+        void lvlBanner.offsetWidth; // trigger reflow
+        lvlBanner.classList.add("animate-banner");
+    }
+
+    // ABILITIES
+    function useNuke() {
+        if(nukeCD > 0) return;
+        nukeCD = CD_MAX.NUKE;
+        const enemies = document.querySelectorAll(".enemy");
+        enemies.forEach(en => {
+            score++; coins++; en.remove();
+        });
+        triggerFlash();
+        screenShake();
+    }
+
+    function useSlow() {
+        if(slowCD > 0) return;
+        slowCD = CD_MAX.SLOW;
+        isSlowed = true;
+        gameArea.style.filter = "saturate(0.2) brightness(0.8)";
+        setTimeout(() => {
+            isSlowed = false;
+            gameArea.style.filter = "none";
+        }, 5000);
+    }
+
+    function useHeal() {
+        if(healCD > 0) return;
+        const max = 5 + hpUpgrade;
+        if (health >= max) return;
+        healCD = CD_MAX.HEAL;
+        health = Math.min(max, health + 2);
+        updateHealthBar();
+        createFloatingText("RECOVERED", window.innerWidth/2, window.innerHeight/2);
+    }
+
+    function screenShake() {
+        document.body.classList.add("shake");
+        setTimeout(() => document.body.classList.remove("shake"), 150);
+    }
+
+    function triggerFlash() {
+        flash.style.opacity = "1";
+        setTimeout(() => flash.style.opacity = "0", 200);
+    }
+
+    function createFloatingText(txt, x, y) {
+        const t = document.createElement("div");
+        t.className = "floatingText";
+        t.textContent = txt;
+        t.style.left = x + "px"; t.style.top = y + "px";
+        gameArea.appendChild(t);
+        setTimeout(() => t.remove(), 600);
+    }
+
+    function updateUI() {
+        scoreText.textContent = score;
+        timeText.textContent = timeLeft;
+    }
+
+    function updateAbilityUI() {
+        btnNuke.style.opacity = nukeCD > 0 ? "0.3" : "1";
+        btnSlow.style.opacity = slowCD > 0 ? "0.3" : "1";
+        btnHeal.style.opacity = healCD > 0 ? "0.3" : "1";
+        btnNuke.innerText = nukeCD > 0 ? nukeCD : "💥";
+        btnSlow.innerText = slowCD > 0 ? slowCD : "🐢";
+        btnHeal.innerText = healCD > 0 ? healCD : "❤️";
+    }
+
+    gameArea.onpointerdown = (e) => {
+        if (e.target === gameArea) {
+            takeDamage();
+            createFloatingText("MISS!", e.clientX, e.clientY);
+        }
+    };
+
+    function endGame() {
+        clearTimeout(spawnLoop);
+        clearInterval(timerLoop);
+        if (score > highScore) highScore = score;
+        save();
+        
+        const overlay = document.createElement("div");
+        overlay.className = "screen";
+        overlay.style.display = "flex";
+        overlay.style.zIndex = "2000";
+        overlay.style.background = "rgba(0,0,0,0.9)";
+        overlay.innerHTML = `
+            <div style="font-size:14px; opacity:0.6; text-transform:uppercase;">Final Score</div>
+            <div style="font-size:64px; font-weight:900; margin-bottom:30px;">${score}</div>
+            <button class="btn" onclick="location.reload()">Done</button>
+        `;
+        document.body.appendChild(overlay);
+    }
+
+    function buyHealth() {
+        if (coins >= 10) { coins -= 10; hpUpgrade++; save(); updateMenu(); }
+    }
+
+    function buyTime() {
+        if (coins >= 15) { coins -= 15; timeUpgrade += 5; save(); updateMenu(); }
+    }
+
+    function save() {
+        localStorage.setItem("ts_coins", coins);
+        localStorage.setItem("ts_highScore", highScore);
+        localStorage.setItem("ts_hpUp", hpUpgrade);
+        localStorage.setItem("ts_timeUp", timeUpgrade);
+    }
+
+    // Prevent scrolling and typical browser behaviors for a "native" feel
+    document.addEventListener('touchmove', (e) => e.preventDefault(), { passive: false });
+</script>
+
+</body>
+</html>
